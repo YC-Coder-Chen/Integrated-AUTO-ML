@@ -9,6 +9,17 @@ Created on Tue Aug 13 10:10:21 2019
 import pandas as pd
 import numpy as np
 from IPython.display import clear_output
+import itertools
+import warnings
+warnings.filterwarnings("ignore")
+import operator
+import matplotlib.pyplot as plt
+from imblearn.over_sampling import SMOTE
+import sklearn as sk
+from sklearn.metrics import confusion_matrix
+from sklearn import model_selection as sk_ms
+from sklearn.model_selection import KFold
+from sklearn.feature_selection import SelectKBest, f_classif
 
 class data_cleaning:
     def __init__(self, df, candi_col, tar_col, actions_dict):
@@ -76,7 +87,6 @@ class data_cleaning:
         inner_loop(idx, self.candi_col, list_idx) 
         return action 
 
-#%%
 class feature_check:
     def __init__(self, df, tar_col):
         self.df = df
@@ -90,18 +100,8 @@ class feature_check:
     def check_object(self):
         return list(self.df.select_dtypes(['object']).columns)==[]
     
-    def check_imblance(sedf):
-        return self.df[tar_col].value_counts()
-
-#%%
-import itertools
-import warnings
-warnings.filterwarnings("ignore")
-import operator
-from imblearn.over_sampling import SMOTE
-from sklearn import model_selection as sk_ms
-from sklearn.model_selection import KFold
-from sklearn.feature_selection import SelectKBest, f_classif
+    def check_imblance(self):
+        return self.df[self.tar_col].value_counts()
 
 class autoML:
     def __init__(self, df, tar_col):
@@ -120,7 +120,7 @@ class autoML:
             self.train, self.test = sk_ms.train_test_split(self.df, test_size=size)
         
     def cross_validation(self, fold, col, model, params, scorer, fill_mean = False, scaling = False, 
-                         fkbest=None, smote=False, classification=False):
+                         fkbest=None, smote=False, classification=True):
         train = self.train.copy()
         target = self.tar_col
         result_dict = dict() 
@@ -137,28 +137,34 @@ class autoML:
                     fold_valid = train.iloc[test_index,:].copy()
 
                     if fill_mean:
-                        for col in [list(set(col) - set([target]))]:
-                            mean = fold_train[col].mean()
-                            fold_train.loc[:,col] = fold_train.loc[:,col].fillna(mean).copy()
-                            fold_valid.loc[:,col] = fold_valid.loc[:,col] .fillna(mean).copy() 
+                        for column in list(set(col) - set([target])):
+                            mean = fold_train[column].mean()
+                            fold_train.loc[:,column] = fold_train.loc[:,column].fillna(mean).copy()
+                            fold_valid.loc[:,column] = fold_valid.loc[:,column].fillna(mean).copy() 
 
                     if scaling:
-                        for col in [list(set(col) - set([target]))]:
-                            mean = fold_train[col].mean()
-                            std = fold_train[col].std()
-                            train_value = (fold_train.loc[:,col] - mean)/std
-                            valid_value = (fold_valid.loc[:,col] - mean)/std
-                            train_value = train_value.fillna(train_value.max())
-                            valid_value = valid_value.fillna(train_value.max()) 
-                            fold_train.loc[:,col] = train_value
-                            fold_valid.loc[:,col] = valid_value
+                        for column in list(set(col) - set([target])):
+                            mean = fold_train[column].mean()
+                            std = fold_train[column].std()
+                            max_value = fold_train.loc[:,column].max()
+                            min_value = fold_train.loc[:,column].min() 
+                            
+                            train_value = ((fold_train.loc[:,column] - mean)/std)\
+                                    .replace([np.inf], max_value).replace([-np.inf], min_value)
+                            
+                            valid_value = ((fold_valid.loc[:,column] - mean)/std)\
+                                    .replace([np.inf], max_value).replace([-np.inf], min_value)
+                            train_value = train_value.fillna(train_value.mean()).fillna(0)
+                            valid_value = valid_value.fillna(train_value.mean()).fillna(0)
+                            fold_train.loc[:,column] = train_value
+                            fold_valid.loc[:,column] = valid_value
                             
                     fold_train_x = fold_train[list(set(col) - set([target]))].copy()
                     fold_train_y = fold_train[target].copy() 
 
                     if fkbest==[len(col)]:
                         fvalue_selector = SelectKBest(f_classif, k=best_n)
-                        x_temp = fvalue_selector.fit_transform(fold_train_x, fold_train_y)
+                        fvalue_selector.fit_transform(fold_train_x, fold_train_y)
                         feature_list = fold_train_x.columns[fvalue_selector.get_support(indices=True)].tolist()
                         fold_train_x = fold_train[feature_list].copy()
                         fold_train_y = fold_train[target].copy()
@@ -186,4 +192,83 @@ class autoML:
         return (result_dict, max(result_dict.items(), key=operator.itemgetter(1))
                 ,min(result_dict.items(), key=operator.itemgetter(1)))
 
-#%%
+    
+    def predict_test(self, col, model, best_params, scorer, fill_mean = False, scaling = False, 
+                         fkbest=None, smote=False, classification=True):
+        train = self.train.copy()
+        evaluation = self.test.copy()
+        target = self.tar_col
+        params_list = list(itertools.product(*best_params.values()))
+        
+        if fkbest==None:
+            fkbest = [len(col)]        
+        best_n = fkbest
+        param_dict = dict(zip(best_params.keys(),params_list[0])) 
+        
+        
+        if fill_mean:
+            for column in list(set(col) - set([target])):
+                mean = train[column].mean()
+                train.loc[:,column] = train.loc[:,column].fillna(mean).copy()
+                evaluation.loc[:,column] = evaluation.loc[:,column].fillna(mean).copy() 
+
+        if scaling:
+            for column in list(set(col) - set([target])):
+                mean = train[column].mean()
+                std = train[column].std()
+                max_value = train.loc[:,column].max()
+                min_value = train.loc[:,column].min() 
+
+                train_value = ((train.loc[:,column] - mean)/std)\
+                        .replace([np.inf], max_value).replace([-np.inf], min_value)
+
+                eval_value = ((evaluation.loc[:,column] - mean)/std)\
+                        .replace([np.inf], max_value).replace([-np.inf], min_value)
+                train_value = train_value.fillna(train_value.mean()).fillna(0)
+                eval_value = eval_value.fillna(train_value.mean()).fillna(0)
+                train.loc[:,column] = train_value
+                evaluation.loc[:,column] = eval_value
+
+        train_x = train[list(set(col) - set([target]))].copy()
+        train_y = train[target].copy() 
+
+        if fkbest==[len(col)]:
+            fvalue_selector = SelectKBest(f_classif, k=best_n)
+            fvalue_selector.fit_transform(train_x, train_y)
+            feature_list = train_x.columns[fvalue_selector.get_support(indices=True)].tolist()
+            train_x = train[feature_list].copy()
+            train_y = train[target].copy()
+
+        if classification and smote:
+            sm = SMOTE()
+            col_smote = train_x.columns
+            train_x, train_y = sm.fit_sample(train_x,train_y)
+            train_x = pd.DataFrame(train_x, columns = col_smote).copy()
+            
+        col_eval = train_x.columns
+        evaluation_x = evaluation[col_eval].copy()
+        evaluation_y = evaluation[target].copy()
+
+        estimator = model(**param_dict)
+        tree = estimator.fit(X = train_x, y = train_y.ravel())
+        try:
+            prediction = tree.predict_proba(evaluation_x)[:,1]
+        except:
+            prediction = tree.predict(evaluation_x)
+        
+        if classification==True:
+            thres = np.array([0.05*i for i in range(20)])
+            def precision_cal(x):
+                tn, fp, fn, tp = confusion_matrix(evaluation_y, prediction>=x).ravel()
+                return tp/(tp+fp)
+            precision = [precision_cal(i) for i in thres]
+
+            def recall_cal(x):
+                tn, fp, fn, tp = confusion_matrix(evaluation_y, prediction>=x).ravel()
+                return tp/(tp+fn)
+            recall = np.array([recall_cal(i) for i in thres])
+            
+            plt.plot(thres, precision, 'r--', thres, recall, 'b--')
+            plt.show()
+            
+        return (tree, prediction)
