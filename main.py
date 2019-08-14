@@ -6,6 +6,8 @@ Created on Tue Aug 13 10:10:21 2019
 @author: chenyingxiang
 """
 #%%
+import os
+import pickle
 import pandas as pd
 import numpy as np
 from IPython.display import clear_output
@@ -107,6 +109,9 @@ class autoML:
     def __init__(self, df, tar_col):
         self.df = df
         self.tar_col = tar_col
+        data_dir="./data/"
+        if not os.path.exists(data_dir):
+            os.mkdir(data_dir)
     
     def split(self, size = 0.2, train=[], test=[]):
         if train!=[] and test==[]:
@@ -119,7 +124,7 @@ class autoML:
         if train==[] and test==[]:
             self.train, self.test = sk_ms.train_test_split(self.df, test_size=size)
         
-    def cross_validation(self, fold, col, model, params, scorer, fill_mean = False, scaling = False, 
+    def cross_validation(self, fold, col, model, params, scorer, fill_method = False, scaling = False, 
                          fkbest=None, smote=False, classification=True):
         train = self.train.copy()
         target = self.tar_col
@@ -135,12 +140,58 @@ class autoML:
                 for train_index, test_index in kf.split(train):
                     fold_train = train.iloc[train_index,:].copy()
                     fold_valid = train.iloc[test_index,:].copy()
+                    
+                    if (fold_train[list(set(col) - set([target]))].isnull().sum().sum()!=0) and (fill_method == False):
+                        raise ValueError('missing value found in the dataset')
+                    if (fold_valid[list(set(col) - set([target]))].isnull().sum().sum()!=0) and (fill_method == False):
+                        raise ValueError('missing value found in the dataset')
 
-                    if fill_mean:
+                    if fill_method == 'mean':
                         for column in list(set(col) - set([target])):
                             mean = fold_train[column].mean()
                             fold_train.loc[:,column] = fold_train.loc[:,column].fillna(mean).copy()
                             fold_valid.loc[:,column] = fold_valid.loc[:,column].fillna(mean).copy() 
+                    
+                    if fill_method == 'zero':
+                        for column in list(set(col) - set([target])):
+                            fold_train.loc[:,column] = fold_train.loc[:,column].fillna(0).copy()
+                            fold_valid.loc[:,column] = fold_valid.loc[:,column].fillna(0).copy() 
+                    
+                    if fill_method == 'max':
+                        for column in list(set(col) - set([target])):
+                            max_value = fold_train[column].max()
+                            fold_train.loc[:,column] = fold_train.loc[:,column].fillna(max_value).copy()
+                            fold_valid.loc[:,column] = fold_valid.loc[:,column].fillna(max_value).copy() 
+                    
+                    if fill_method == 'min':
+                        for column in list(set(col) - set([target])):
+                            min_value = fold_train[column].min()
+                            fold_train.loc[:,column] = fold_train.loc[:,column].fillna(min_value).copy()
+                            fold_valid.loc[:,column] = fold_valid.loc[:,column].fillna(min_value).copy()                     
+                    
+                    if fill_method == 'median':
+                        for column in list(set(col) - set([target])):
+                            median_value = fold_train[column].median()
+                            fold_train.loc[:,column] = fold_train.loc[:,column].fillna(median_value).copy()
+                            fold_valid.loc[:,column] = fold_valid.loc[:,column].fillna(median_value).copy()
+                    
+                    if fill_method == 'mode':
+                        for column in list(set(col) - set([target])):
+                            mode_value = fold_train[column].mode().values[0]
+                            fold_train.loc[:,column] = fold_train.loc[:,column].fillna(mode_value).copy()
+                            fold_valid.loc[:,column] = fold_valid.loc[:,column].fillna(mode_value).copy() 
+                            
+                    if isinstance(fill_method, dict):
+                        for column in list(set(col) - set([target])):
+                            if column in fill_method.keys():
+                                value = fill_method.get(column)
+                                fold_train.loc[:,column] = fold_train.loc[:,column].fillna(value).copy()
+                                fold_valid.loc[:,column] = fold_valid.loc[:,column].fillna(value).copy() 
+
+                    if (fold_train[list(set(col) - set([target]))].isnull().sum().sum()!=0):
+                        raise ValueError('missing value found in the dataset')
+                    if (fold_valid[list(set(col) - set([target]))].isnull().sum().sum()!=0):
+                        raise ValueError('missing value found in the dataset')                               
 
                     if scaling:
                         for column in list(set(col) - set([target])):
@@ -191,9 +242,8 @@ class autoML:
         
         return (result_dict, max(result_dict.items(), key=operator.itemgetter(1))
                 ,min(result_dict.items(), key=operator.itemgetter(1)))
-
     
-    def predict_test(self, col, model, best_params, scorer, fill_mean = False, scaling = False, 
+    def predict_test(self, col, model, best_params, scorer, fill_method = False, scaling = False, 
                          fkbest=None, smote=False, classification=True):
         train = self.train.copy()
         evaluation = self.test.copy()
@@ -206,11 +256,57 @@ class autoML:
         param_dict = dict(zip(best_params.keys(),params_list[0])) 
         
         
-        if fill_mean:
+        if (train[list(set(col) - set([target]))].isnull().sum().sum()!=0) and (fill_method == False):
+            raise ValueError('missing value found in the dataset')
+        if (evaluation[list(set(col) - set([target]))].isnull().sum().sum()!=0) and (fill_method == False):
+            raise ValueError('missing value found in the dataset')
+
+        if fill_method == 'mean':
             for column in list(set(col) - set([target])):
                 mean = train[column].mean()
                 train.loc[:,column] = train.loc[:,column].fillna(mean).copy()
                 evaluation.loc[:,column] = evaluation.loc[:,column].fillna(mean).copy() 
+
+        if fill_method == 'zero':
+            for column in list(set(col) - set([target])):
+                train.loc[:,column] = train.loc[:,column].fillna(0).copy()
+                evaluation.loc[:,column] = evaluation.loc[:,column].fillna(0).copy() 
+
+        if fill_method == 'max':
+            for column in list(set(col) - set([target])):
+                max_value = train[column].max()
+                train.loc[:,column] = train.loc[:,column].fillna(max_value).copy()
+                evaluation.loc[:,column] = evaluation.loc[:,column].fillna(max_value).copy() 
+
+        if fill_method == 'min':
+            for column in list(set(col) - set([target])):
+                min_value = train[column].min()
+                train.loc[:,column] = train.loc[:,column].fillna(min_value).copy()
+                evaluation.loc[:,column] = evaluation.loc[:,column].fillna(min_value).copy()                     
+
+        if fill_method == 'median':
+            for column in list(set(col) - set([target])):
+                median_value = train[column].median()
+                train.loc[:,column] = train.loc[:,column].fillna(median_value).copy()
+                evaluation.loc[:,column] = evaluation.loc[:,column].fillna(median_value).copy()
+
+        if fill_method == 'mode':
+            for column in list(set(col) - set([target])):
+                mode_value = train[column].mode().values[0]
+                train.loc[:,column] = train.loc[:,column].fillna(mode_value).copy()
+                evaluation.loc[:,column] = evaluation.loc[:,column].fillna(mode_value).copy() 
+
+        if isinstance(fill_method, dict):
+            for column in list(set(col) - set([target])):
+                if column in fill_method.keys():
+                    value = fill_method.get(column)
+                    train.loc[:,column] = train.loc[:,column].fillna(value).copy()
+                    evaluation.loc[:,column] = evaluation.loc[:,column].fillna(value).copy() 
+
+        if (train[list(set(col) - set([target]))].isnull().sum().sum()!=0):
+            raise ValueError('missing value found in the dataset')
+        if (evaluation[list(set(col) - set([target]))].isnull().sum().sum()!=0):
+            raise ValueError('missing value found in the dataset') 
 
         if scaling:
             for column in list(set(col) - set([target])):
@@ -251,6 +347,8 @@ class autoML:
 
         estimator = model(**param_dict)
         tree = estimator.fit(X = train_x, y = train_y.ravel())
+        self.test_model = tree
+        
         try:
             prediction = tree.predict_proba(evaluation_x)[:,1]
         except:
@@ -268,7 +366,156 @@ class autoML:
                 return tp/(tp+fn)
             recall = np.array([recall_cal(i) for i in thres])
             
-            plt.plot(thres, precision, 'r--', thres, recall, 'b--')
+            line_up, = plt.plot(thres, precision, 'r--', label='Precision')
+            line_down, = plt.plot(thres, recall, 'b--', label='Recall')
+            plt.legend(handles=[line_up, line_down])
             plt.show()
             
         return (tree, prediction)
+    
+    def final_product(self, col, model, best_params, scorer, fill_method = False, scaling = False, 
+                         fkbest=None, smote=False, classification=True):
+        
+        train = self.train.copy()
+        evaluation = self.test.copy()
+        all_data = train.append(evaluation)   
+        target = self.tar_col
+        params_list = list(itertools.product(*best_params.values()))  
+        
+        if fkbest==None:
+            fkbest = [len(col)]        
+        best_n = fkbest
+        param_dict = dict(zip(best_params.keys(),params_list[0])) 
+        
+        if (all_data[list(set(col) - set([target]))].isnull().sum().sum()!=0) and (fill_method == False):
+            raise ValueError('missing value found in the dataset')
+
+        if fill_method == 'mean':
+            for column in list(set(col) - set([target])):
+                mean = all_data[column].mean()
+                all_data.loc[:,column] = all_data.loc[:,column].fillna(mean).copy()
+
+            all_data_fill = all_data[list(set(col) - set([target]))].mean()
+            all_data_fill  = all_data_fill.to_dict()
+            with open("./data/final_fill.pkl", "wb") as fp:  
+                pickle.dump(all_data_fill, fp)                     
+
+        if fill_method == 'zero':
+            for column in list(set(col) - set([target])):
+                all_data.loc[:,column] = all_data.loc[:,column].fillna(0).copy()
+
+            temp = all_data[list(set(col) - set([target]))].mean()
+            all_data_fill = pd.Series(0, index=temp.index)
+            all_data_fill  = all_data_fill.to_dict()
+            with open("./data/final_fill.pkl", "wb") as fp:  
+                pickle.dump(all_data_fill, fp)   
+
+        if fill_method == 'max':
+            for column in list(set(col) - set([target])):
+                max_value = all_data[column].max()
+                all_data.loc[:,column] = all_data.loc[:,column].fillna(max_value).copy()
+
+            all_data_fill = all_data[list(set(col) - set([target]))].max()
+            all_data_fill  = all_data_fill.to_dict()
+            with open("./data/final_fill.pkl", "wb") as fp:  
+                pickle.dump(all_data_fill, fp) 
+
+        if fill_method == 'min':
+            for column in list(set(col) - set([target])):
+                min_value = all_data[column].min()
+                all_data.loc[:,column] = all_data.loc[:,column].fillna(min_value).copy()                    
+
+            all_data_fill = all_data[list(set(col) - set([target]))].min()
+            all_data_fill  = all_data_fill.to_dict()
+            with open("./data/final_fill.pkl", "wb") as fp:  
+                pickle.dump(all_data_fill, fp)                            
+
+        if fill_method == 'median':
+            for column in list(set(col) - set([target])):
+                median_value = all_data[column].median()
+                all_data.loc[:,column] = all_data.loc[:,column].fillna(median_value).copy()
+
+            all_data_fill = all_data[list(set(col) - set([target]))].median()
+            all_data_fill  = all_data_fill.to_dict()
+            with open("./data/final_fill.pkl", "wb") as fp:  
+                pickle.dump(all_data_fill, fp) 
+
+        if fill_method == 'mode':
+            for column in list(set(col) - set([target])):
+                mode_value = all_data[column].mode().values[0]
+                all_data.loc[:,column] = all_data.loc[:,column].fillna(mode_value).copy()
+
+            all_data_fill = all_data[list(set(col) - set([target]))].mode().iloc[0]
+            all_data_fill  = all_data_fill.to_dict()
+            with open("./data/final_fill.pkl", "wb") as fp:  
+                pickle.dump(all_data_fill, fp) 
+
+        if isinstance(fill_method, dict):
+            for column in list(set(col) - set([target])):
+                if column in fill_method.keys():
+                    value = fill_method.get(column)
+                    all_data.loc[:,column] = all_data.loc[:,column].fillna(value).copy()
+
+            with open("./data/final_fill.pkl", "wb") as fp:  
+                pickle.dump(fill_method, fp) 
+
+        if (all_data[list(set(col) - set([target]))].isnull().sum().sum()!=0):
+            raise ValueError('missing value found in the dataset')
+            
+        
+        if scaling:            
+            # save all the means
+            all_data_mean = all_data[list(set(col) - set([target]))].mean()
+            all_data_mean  = all_data_mean.to_dict()
+            with open("./data/final_mean.pkl", "wb") as fp:  
+                pickle.dump(all_data_mean, fp)       
+            
+            # save all the stds
+            all_data_std = all_data[list(set(col) - set([target]))].std()
+            all_data_std  = all_data_std.to_dict()
+            with open("./data/final_std.pkl", "wb") as fp:  
+                pickle.dump(all_data_std, fp)   
+            
+            for column in list(set(col) - set([target])):
+                mean = train[column].mean()
+                std = train[column].std()
+                max_value = train.loc[:,column].max()
+                min_value = train.loc[:,column].min() 
+
+                all_data_value = ((all_data.loc[:,col] - mean)/std)\
+                        .replace([np.inf], max_value).replace([-np.inf], min_value)
+
+                all_data_value = all_data.fillna(all_data_value.mean()).fillna(0)
+                all_data.loc[:,column] = all_data_value
+            
+        all_data_x = all_data[list(set(col) - set([target]))].copy()
+        all_data_y = all_data[target].copy()             
+        
+        if fkbest==[len(col)]:
+            fvalue_selector = SelectKBest(f_classif, k=best_n)
+            fvalue_selector.fit_transform(all_data_x, all_data_y)
+            feature_list = all_data_x.columns[fvalue_selector.get_support(indices=True)].tolist()
+            all_data_x = all_data[feature_list].copy()
+            all_data_y = all_data[target].copy()
+
+        if classification and smote:
+            sm = SMOTE()
+            col_smote = all_data_x.columns
+            all_data_x, all_data_y = sm.fit_sample(all_data_x, all_data_y)
+            all_data_x = pd.DataFrame(all_data_x, columns = col_smote).copy() 
+
+        estimator = model(**param_dict)
+        tree = estimator.fit(X = all_data_x, y = all_data_y.ravel())
+        self.final_model = tree  
+        
+        with open("./data/final_model.pkl", "wb") as fp:  
+                pickle.dump(tree, fp)
+        
+        with open("./data/final_params.pkl", "wb") as fp:  
+                pickle.dump(best_params, fp)        
+        
+        final_feature = list(set(col) - set([target]))
+        with open("./data/final_feature.pkl", "wb") as fp:  
+            pickle.dump(final_feature, fp)
+        
+        print('Prediction Finished and saved!')
