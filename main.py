@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Aug 13 10:10:21 2019
-
-@author: chenyingxiang
-"""
-#%%
 import os
 import pickle
 import pandas as pd
@@ -28,7 +20,10 @@ class data_cleaning:
         self.df = df
         self.candi_col = sorted(candi_col)
         self.tar_col = tar_col
-        self.actions_dict = actions_dict
+        self.actions_dict = actions_dict   
+        data_dir="./data/"
+        if not os.path.exists(data_dir):
+            os.mkdir(data_dir)
     
     def update_candi_col(self, candi_col):
         self.candi_col = sorted(candi_col)
@@ -36,7 +31,7 @@ class data_cleaning:
     def update_actions_dict(self, actions_dict):
         self.actions_dict = actions_dict
 
-    def main(self, idx=0):
+    def start_action(self, idx=0):
         df = self.df.copy()
         list_idx = list(range(len(self.candi_col)))
         actions_dict = self.actions_dict
@@ -87,6 +82,9 @@ class data_cleaning:
                         break
                         clear_output()
         inner_loop(idx, self.candi_col, list_idx) 
+        
+        with open("./data/final_action.pkl", "wb") as fp:  
+            pickle.dump(action, fp) 
         return action 
 
 class feature_check:
@@ -213,7 +211,7 @@ class autoML:
                     fold_train_x = fold_train[list(set(col) - set([target]))].copy()
                     fold_train_y = fold_train[target].copy() 
 
-                    if fkbest==[len(col)]:
+                    if fkbest!=[len(col)]:
                         fvalue_selector = SelectKBest(f_classif, k=best_n)
                         fvalue_selector.fit_transform(fold_train_x, fold_train_y)
                         feature_list = fold_train_x.columns[fvalue_selector.get_support(indices=True)].tolist()
@@ -328,7 +326,7 @@ class autoML:
         train_x = train[list(set(col) - set([target]))].copy()
         train_y = train[target].copy() 
 
-        if fkbest==[len(col)]:
+        if fkbest!=[len(col)]:
             fvalue_selector = SelectKBest(f_classif, k=best_n)
             fvalue_selector.fit_transform(train_x, train_y)
             feature_list = train_x.columns[fvalue_selector.get_support(indices=True)].tolist()
@@ -390,65 +388,85 @@ class autoML:
         if (all_data[list(set(col) - set([target]))].isnull().sum().sum()!=0) and (fill_method == False):
             raise ValueError('missing value found in the dataset')
 
+        ########### saving all the data for furthur cleaning
+        all_data_mean = all_data[list(set(col) - set([target]))].mean()
+        all_data_mean  = all_data_mean.to_dict()
+        with open("./data/final_mean.pkl", "wb") as fp:  
+            pickle.dump(all_data_mean, fp) 
+        
+        temp = all_data[list(set(col) - set([target]))].mean()
+        all_data_zero = pd.Series(0, index=temp.index)
+        all_data_zero  = all_data_zero.to_dict()        
+        with open("./data/final_zero.pkl", "wb") as fp:  
+            pickle.dump(all_data_zero, fp)  
+        
+        all_data_max = all_data[list(set(col) - set([target]))].max()
+        all_data_max  = all_data_max.to_dict()
+        with open("./data/final_max.pkl", "wb") as fp:  
+            pickle.dump(all_data_max, fp)  
+        
+        all_data_min = all_data[list(set(col) - set([target]))].min()
+        all_data_min  = all_data_min.to_dict()
+        with open("./data/final_min.pkl", "wb") as fp:  
+            pickle.dump(all_data_min, fp)            
+        
+        all_data_median = all_data[list(set(col) - set([target]))].median()
+        all_data_median  = all_data_median.to_dict()
+        with open("./data/final_median.pkl", "wb") as fp:  
+            pickle.dump(all_data_median, fp)         
+        
+        all_data_mode = all_data[list(set(col) - set([target]))].mode().iloc[0]
+        all_data_mode  = all_data_mode.to_dict()
+        with open("./data/final_mode.pkl", "wb") as fp:  
+            pickle.dump(all_data_mode, fp)         
+        
+        #############
         if fill_method == 'mean':
             for column in list(set(col) - set([target])):
                 mean = all_data[column].mean()
                 all_data.loc[:,column] = all_data.loc[:,column].fillna(mean).copy()
-
-            all_data_fill = all_data[list(set(col) - set([target]))].mean()
-            all_data_fill  = all_data_fill.to_dict()
+                
             with open("./data/final_fill.pkl", "wb") as fp:  
-                pickle.dump(all_data_fill, fp)                     
+                pickle.dump(all_data_mean, fp)                     
 
         if fill_method == 'zero':
             for column in list(set(col) - set([target])):
                 all_data.loc[:,column] = all_data.loc[:,column].fillna(0).copy()
 
-            temp = all_data[list(set(col) - set([target]))].mean()
-            all_data_fill = pd.Series(0, index=temp.index)
-            all_data_fill  = all_data_fill.to_dict()
             with open("./data/final_fill.pkl", "wb") as fp:  
-                pickle.dump(all_data_fill, fp)   
+                pickle.dump(all_data_zero, fp)   
 
         if fill_method == 'max':
             for column in list(set(col) - set([target])):
                 max_value = all_data[column].max()
                 all_data.loc[:,column] = all_data.loc[:,column].fillna(max_value).copy()
 
-            all_data_fill = all_data[list(set(col) - set([target]))].max()
-            all_data_fill  = all_data_fill.to_dict()
             with open("./data/final_fill.pkl", "wb") as fp:  
-                pickle.dump(all_data_fill, fp) 
+                pickle.dump(all_data_max, fp) 
 
         if fill_method == 'min':
             for column in list(set(col) - set([target])):
                 min_value = all_data[column].min()
                 all_data.loc[:,column] = all_data.loc[:,column].fillna(min_value).copy()                    
-
-            all_data_fill = all_data[list(set(col) - set([target]))].min()
-            all_data_fill  = all_data_fill.to_dict()
+            
             with open("./data/final_fill.pkl", "wb") as fp:  
-                pickle.dump(all_data_fill, fp)                            
+                pickle.dump(all_data_min, fp)                            
 
         if fill_method == 'median':
             for column in list(set(col) - set([target])):
                 median_value = all_data[column].median()
                 all_data.loc[:,column] = all_data.loc[:,column].fillna(median_value).copy()
 
-            all_data_fill = all_data[list(set(col) - set([target]))].median()
-            all_data_fill  = all_data_fill.to_dict()
             with open("./data/final_fill.pkl", "wb") as fp:  
-                pickle.dump(all_data_fill, fp) 
+                pickle.dump(all_data_median, fp) 
 
         if fill_method == 'mode':
             for column in list(set(col) - set([target])):
                 mode_value = all_data[column].mode().values[0]
                 all_data.loc[:,column] = all_data.loc[:,column].fillna(mode_value).copy()
 
-            all_data_fill = all_data[list(set(col) - set([target]))].mode().iloc[0]
-            all_data_fill  = all_data_fill.to_dict()
             with open("./data/final_fill.pkl", "wb") as fp:  
-                pickle.dump(all_data_fill, fp) 
+                pickle.dump(all_data_mode, fp) 
 
         if isinstance(fill_method, dict):
             for column in list(set(col) - set([target])):
@@ -485,13 +503,13 @@ class autoML:
                 all_data_value = ((all_data.loc[:,col] - mean)/std)\
                         .replace([np.inf], max_value).replace([-np.inf], min_value)
 
-                all_data_value = all_data.fillna(all_data_value.mean()).fillna(0)
+                all_data_value = all_data_value.fillna(all_data_value.mean()).fillna(0)
                 all_data.loc[:,column] = all_data_value
             
         all_data_x = all_data[list(set(col) - set([target]))].copy()
         all_data_y = all_data[target].copy()             
         
-        if fkbest==[len(col)]:
+        if fkbest!=[len(col)]:
             fvalue_selector = SelectKBest(f_classif, k=best_n)
             fvalue_selector.fit_transform(all_data_x, all_data_y)
             feature_list = all_data_x.columns[fvalue_selector.get_support(indices=True)].tolist()
@@ -509,13 +527,156 @@ class autoML:
         self.final_model = tree  
         
         with open("./data/final_model.pkl", "wb") as fp:  
-                pickle.dump(tree, fp)
+            pickle.dump(tree, fp)      
         
-        with open("./data/final_params.pkl", "wb") as fp:  
-                pickle.dump(best_params, fp)        
-        
-        final_feature = list(set(col) - set([target]))
-        with open("./data/final_feature.pkl", "wb") as fp:  
-            pickle.dump(final_feature, fp)
-        
+        final_setting = dict()
+        final_setting['col'] = list(all_data_x.columns)
+        final_setting['best_params'] = best_params
+        final_setting['fill_method'] = fill_method
+        final_setting['scaling'] = scaling
+        final_setting['fkbest'] = fkbest
+        final_setting['smote'] = smote
+        final_setting['classification'] = classification
+        with open("./data/final_setting.pkl", "wb") as fp:  
+                pickle.dump(final_setting, fp)         
+          
         print('Prediction Finished and saved!')
+
+class autoPredict:
+    def __init__(self, df):
+        self.df = df
+        data_dir="./data/"
+        if not os.path.exists(data_dir):
+            raise ValueError('Pls train the model first!')
+    
+    def load_action(self):
+        try:
+            with open("./data/final_action.pkl", "rb") as fp:  
+                action = pickle.load(fp)
+            print('remember to update the dataset')
+            return action
+        except:
+            print('No previous actions recorded')
+    
+    def update_dataset(self, dataset):
+        self.df = dataset
+    
+    def check_missing(self):
+        df_missing = self.df.isnull().sum().reset_index()
+        df_missing.columns = ['features','#null']
+        return df_missing, list(df_missing[df_missing['#null']>0]['features'].values)
+    
+    def check_object(self):
+        return list(self.df.select_dtypes(['object']).columns)==[]
+    
+    def predict(self, fill_new = False):
+        with open("./data/final_setting.pkl", "rb") as fp:  
+            final_setting = pickle.load(fp)
+        
+        col = final_setting['col']
+        scaling = final_setting['scaling']
+        fkbest = final_setting['fkbest']
+        fill_method = final_setting['fill_method']
+        df = self.df.copy()
+        
+        if scaling:
+            try:     
+                with open("./data/final_mean.pkl", "rb") as fp:  
+                    all_data_mean = pickle.load(fp) 
+                with open("./data/final_std.pkl", "rb") as fp:  
+                    all_data_std = pickle.load(fp) 
+            except:
+                raise ValueError('Previous mean/std not found!')
+        
+        if fill_method != False:
+            try:
+                with open("./data/final_fill.pkl", "rb") as fp:  
+                    all_data_fill = pickle.load(fp)
+            except:
+                raise ValueError('Previous fill n/a data not found!')
+
+        for column in col:
+            if column not in df.columns:
+                df[column] = 0
+            
+            # fill missing values
+            if fill_method != False:
+                if column in all_data_fill.keys():
+                    value = all_data_fill.get(column)
+                    df.loc[:,column] = df.loc[:,column].fillna(value).copy()
+
+        if (df[col].isnull().sum().sum()!=0) and (fill_new == False):
+            raise ValueError('missing value still found in the dataset')
+        
+        if fill_new:
+            if fill_new == 'mean':
+                with open(f"./data/final_{fill_new}.pkl", "rb") as fp:  
+                    fill_params = pickle.load(fp)
+                for column in col:
+                    mean = fill_params[column]
+                    df.loc[:,column] = df.loc[:,column].fillna(mean).copy()                    
+
+            if fill_new == 'zero':
+                for column in col:
+                    df.loc[:,column] = df.loc[:,column].fillna(0).copy()
+
+            if fill_new == 'max':
+                with open(f"./data/final_{fill_new}.pkl", "rb") as fp:  
+                    fill_params = pickle.load(fp)
+                for column in col:
+                    max_value = fill_params[column]
+                    df.loc[:,column] = df.loc[:,column].fillna(max_value).copy()
+
+            if fill_new == 'min':
+                with open(f"./data/final_{fill_new}.pkl", "rb") as fp:  
+                    fill_params = pickle.load(fp)
+                for column in col:
+                    min_value = fill_params[column]
+                    df.loc[:,column] = df.loc[:,column].fillna(min_value).copy()                                               
+
+            if fill_new == 'median':
+                with open(f"./data/final_{fill_new}.pkl", "rb") as fp:  
+                    fill_params = pickle.load(fp)
+                for column in col:
+                    median_value = fill_params[column]
+                    df.loc[:,column] = df.loc[:,column].fillna(median_value).copy()
+
+            if fill_new == 'mode':
+                with open(f"./data/final_{fill_new}.pkl", "rb") as fp:  
+                    fill_params = pickle.load(fp)
+                for column in col:
+                    mode_value = fill_params[column]
+                    df.loc[:,column] = df.loc[:,column].fillna(mode_value).copy()
+
+            if isinstance(fill_new, dict):
+                for column in col:
+                    if column in fill_new.keys():
+                        value = fill_new.get(column)
+                        df.loc[:,column] = df.loc[:,column].fillna(value).copy()
+        
+        if (df[col].isnull().sum().sum()!=0) :
+            raise ValueError('missing value still found in the dataset')        
+        
+        # scaling
+        for column in col:    
+            if scaling == True:
+                mean = all_data_mean[column]
+                std = all_data_std[column]
+                max_value = df.loc[:,column].max()
+                min_value = df.loc[:,column].min()
+                
+                df_value = ((df.loc[:,col] - mean)/std)\
+                        .replace([np.inf], max_value).replace([-np.inf], min_value)
+
+                df_value = df_value.fillna(df_value.mean()).fillna(0)
+                df.loc[:,column] = df_value      
+        
+        df = df[col].copy()
+        with open("./data/final_model.pkl", "rb") as fp:  
+            final_model = pickle.load(fp)
+        try:
+            prediction = final_model.predict_proba(df)[:,1]
+        except:
+            prediction = final_model.predict(df)
+        
+        return prediction 
