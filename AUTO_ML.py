@@ -20,7 +20,8 @@ class data_cleaning:
         self.df = df
         self.candi_col = sorted(candi_col)
         self.tar_col = tar_col
-        self.actions_dict = actions_dict   
+        self.actions_dict = actions_dict
+        
         data_dir="./data/"
         if not os.path.exists(data_dir):
             os.mkdir(data_dir)
@@ -351,6 +352,8 @@ class autoML:
             prediction = tree.predict_proba(evaluation_x)[:,1]
         except:
             prediction = tree.predict(evaluation_x)
+        
+        print('The score is ' + str(scorer(evaluation_y.values, prediction)))
         
         if classification==True:
             thres = np.array([0.05*i for i in range(20)])
