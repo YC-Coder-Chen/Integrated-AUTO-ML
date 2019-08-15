@@ -21,6 +21,10 @@ Before this tool, the work of the data scientist is tedious. Suppose I have a hi
 
 Module IV is the auto Prediction module. It helps to apply what has been saved during the final training process(such as what column is used, what is the final model, the necessary statistics needed for filling of missing value at new test set, etc.) and automatically make the final prediction.
 
+Development
+-----------
+
+Demo_Titanic.ipynb is the Demo using Titanic dataset.
 
 Installation
 ------------
@@ -29,11 +33,8 @@ Dependencies
 ~~~~~~~~~~~~
 
 Integrated-AUTO-ML requires:
+
+- Python (>= 3.5)
 - scikit-learn (>= 0.20)
 - matplotlib (>= 3.0)
 - imblearn (>= 0.4)
-
-Development
------------
-
-Demo_Titanic.ipynb is the Demo using Titanic dataset.
